@@ -1,0 +1,4 @@
+boto3~=1.34.28
+pytz~=2024.1
+requests~=2.31.0
+timezonefinder
