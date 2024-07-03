@@ -1,42 +1,9 @@
 import json
 import os
 from datetime import datetime
-from datetime import timedelta
 
 import boto3
 import pytz
-import requests
-from timezonefinder import TimezoneFinder
-
-
-def convert_utc_to_local(utc_time_str, timezone_name):
-    try:
-        # Get the current date
-        current_date = datetime.now().date()
-
-        # Combine the current date with the provided UTC time
-        combined_utc_str = f"{current_date} {utc_time_str}"
-
-        # Define the UTC timezone
-        utc_timezone = pytz.utc
-
-        # Convert the combined string to a datetime object and localize to UTC
-        utc_datetime = utc_timezone.localize(datetime.strptime(combined_utc_str, "%Y-%m-%d %H:%M"))
-
-        # Get the local timezone object
-        local_timezone = pytz.timezone(timezone_name)
-
-        # Convert the UTC time to local time in the specified timezone
-        local_time = utc_datetime.astimezone(local_timezone)
-
-        # Format the local time to 'HH:MM'
-        local_time_str = local_time.strftime('%H:%M')
-
-        return local_time_str
-    except pytz.UnknownTimeZoneError:
-        return f"Unknown timezone: {timezone_name}"
-    except ValueError:
-        return "Incorrect time format. Please use 'HH:MM'."
 
 
 def get_local_time(timezone_name):
@@ -52,107 +19,36 @@ def get_local_time(timezone_name):
         return f"Unknown timezone: {timezone_name}"
 
 
-def get_utc_offset(timezone_name):
-    try:
-        # Create a timezone object
-        tz = pytz.timezone(timezone_name)
+def is_daytime(table_name) -> bool:
+    print("Checking if it is daytime")
+    ddb = boto3.resource('dynamodb')
+    table = ddb.Table(table_name)
 
-        # Get the current time in the given timezone
-        current_time = datetime.now(tz)
+    response = table.get_item(Key={'primary_key': 'twilight'})
 
-        # Get the offset for standard time
-        standard_offset = tz.utcoffset(current_time.replace(tzinfo=None)).total_seconds() / 3600
-
-        # Get the offset during daylight saving time
-        dst_offset = tz.dst(current_time.replace(tzinfo=None)).total_seconds() / 3600 if tz.dst(
-            current_time.replace(tzinfo=None)) else 0
-
-        # Calculate the total offset during DST
-        total_offset_during_dst = standard_offset + dst_offset
-
-        return standard_offset, total_offset_during_dst
-
-    except Exception as e:
-        return str(e)
-
-
-def is_dst(date, timezone):
-    tz = pytz.timezone(timezone)
-    aware_date = tz.localize(date, is_dst=None)
-    return aware_date.dst() != timedelta(0)
-
-
-def get_local_timezone_offset(date, timezone):
-    standard_offset, dst_offset = get_utc_offset(timezone)
-
-    if is_dst(date, timezone):
-        return dst_offset  # CDT (Central Daylight Time)
+    item = response.get('Item')
+    if item:
+        sunrise = item.get('sunrise')
+        sunset = item.get('sunset')
+        timezone = item.get('timezone')
     else:
-        return standard_offset  # CST (Central Standard Time)
+        raise Exception("No items found in DDB")
 
+    print(f"Timezone: {timezone} Sunrise: {sunrise}, Sunset: {sunset}")
 
-def get_timezone(latitude, longitude):
-    # Create an instance of TimezoneFinder
-    tf = TimezoneFinder()
-    # Get the timezone name
-    return tf.timezone_at(lat=float(latitude), lng=float(longitude))
+    current_time = datetime.strptime(get_local_time(timezone), "%H:%M").time()
+    sunrise_time = datetime.strptime(sunrise, "%H:%M").time()
+    sunset_time = datetime.strptime(sunset, "%H:%M").time()
 
-
-def get_local_twilight_times(latitude, longitude):
-    sunrise_utc = None
-    sunset_utc = None
-    date = datetime.now()  # Today's date
-    timezone = get_timezone(latitude, longitude)
-    url = (f"https://aa.usno.navy.mil/api/rstt/oneday?date={date.strftime('%Y-%m-%d')}&coords={latitude},{longitude}")
-    print(url)
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an HTTPError for bad responses (4xx and 5xx)
-    data = response.json()
-    print(data)
-    sundata = data['properties']['data']['sundata']
-    for entry in sundata:
-        if entry['phen'] == 'Rise':
-            sunrise_utc = entry['time']
-        elif entry['phen'] == 'Set':
-            sunset_utc = entry['time']
-
-    if not sunrise_utc or not sunset_utc:
-        raise ValueError("Sunrise or sunset time not found in the response")
-
-    print(f"Sunrise UTC: {sunrise_utc}, Sunset UTC: {sunset_utc}")
-
-    sunrise_local = convert_utc_to_local(sunrise_utc, timezone)
-    sunset_local = convert_utc_to_local(sunset_utc, timezone)
-
-    print(f"Sunrise local: {sunrise_local}, Sunset local: {sunset_local}")
-
-    return sunrise_local, sunset_local
-
-
-def is_daytime(longitude, latitude) -> bool:
-    print(f"Latitude: {latitude}, Longitude: {longitude}")
-
-    sunrise_local, sunset_local = get_local_twilight_times(latitude, longitude)
-    print(f"Sunrise: {sunrise_local}, Sunset: {sunset_local}")
-
-    timezone = get_timezone(latitude, longitude)
-    print(f"Timezone: {timezone}")
-
-    current_time = datetime.strptime(get_local_time(timezone), '%H:%M')
-    sunrise = datetime.strptime(sunrise_local, '%H:%M')
-    sunset = datetime.strptime(sunset_local, '%H:%M')
-
-    current_time_only = current_time.time()
-    sunrise_time = sunrise.time()
-    sunset_time = sunset.time()
+    print(f"Current time: {current_time}, Sunrise time: {sunrise_time}, Sunset time: {sunset_time}")
 
     if sunrise_time < sunset_time:
-        if sunrise_time <= current_time_only < sunset_time:
+        if sunrise_time <= current_time < sunset_time:
             return True
         else:
             return False
     else:
-        if current_time_only >= sunrise_time or current_time_only < sunset_time:
+        if current_time >= sunrise_time or current_time < sunset_time:
             return True
         else:
             return False
@@ -221,31 +117,30 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
 
 
 def lambda_handler(event, context):
-    latitude = os.getenv('LATITUDE')
-    longitude = os.getenv('LONGITUDE')
-    ddb_table_name = os.getenv('DDB_TABLE_NAME')
+    ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
+    ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
     sns_topic_arn = os.getenv('SNS_TOPIC_ARN')
     mqtt_topic = os.getenv('MQTT_TOPIC')
     iot_endpoint = os.getenv('IOT_ENDPOINT')
 
     dynamodb = boto3.resource('dynamodb')
-    table = dynamodb.Table(ddb_table_name)
+    ddb_state_table = dynamodb.Table(ddb_state_table_name)
 
     print("Received event: " + json.dumps(event, indent=2))
     door_status = event.get('door')
 
-    now_daytime = is_daytime(longitude, latitude)
+    now_daytime = is_daytime(ddb_twilight_table_name)
     print(f"Is it daytime? {now_daytime}")
 
     new_state = reported_state(door_status, now_daytime)
     print(f"New state: {new_state}")
 
-    current_state = get_ddb_state(table)
+    current_state = get_ddb_state(ddb_state_table)
     print(f"Current state: {current_state}")
 
     if new_state != current_state:
         print("State has changed. Updating DDB, publishing SNS and MQTT messages.")
-        set_ddb_state(table, new_state)
+        set_ddb_state(ddb_state_table, new_state)
         publish_sns_message(new_state, sns_topic_arn)
     else:
         print("State has not changed. No action required.")
