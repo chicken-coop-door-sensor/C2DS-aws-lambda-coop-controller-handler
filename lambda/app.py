@@ -158,7 +158,7 @@ def is_daytime(longitude, latitude) -> bool:
             return False
 
 
-def determine_state(door_status, now_daytime):
+def reported_state(door_status, is_daytime):
     print(f"door_status: {door_status}")
     print(f"is_daytime: {is_daytime}")
 
@@ -227,6 +227,7 @@ def lambda_handler(event, context):
     sns_topic_arn = os.getenv('SNS_TOPIC_ARN')
     mqtt_topic = os.getenv('MQTT_TOPIC')
     iot_endpoint = os.getenv('IOT_ENDPOINT')
+
     dynamodb = boto3.resource('dynamodb')
     table = dynamodb.Table(ddb_table_name)
 
@@ -236,11 +237,18 @@ def lambda_handler(event, context):
     now_daytime = is_daytime(longitude, latitude)
     print(f"Is it daytime? {now_daytime}")
 
-    new_state = determine_state(door_status, now_daytime)
+    new_state = reported_state(door_status, now_daytime)
+    print(f"New state: {new_state}")
 
     current_state = get_ddb_state(table)
+    print(f"Current state: {current_state}")
 
     if new_state != current_state:
+        print("State has changed. Updating DDB, publishing SNS and MQTT messages.")
         set_ddb_state(table, new_state)
         publish_sns_message(new_state, sns_topic_arn)
-        publish_mqtt_message(new_state, mqtt_topic, iot_endpoint)
+    else:
+        print("State has not changed. No action required.")
+
+    # Publish MQTT message always because the devices need to know the current state
+    publish_mqtt_message(new_state, mqtt_topic, iot_endpoint)
