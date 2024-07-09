@@ -121,7 +121,7 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
 def lambda_handler(event, context):
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
     ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
-    sns_topic_arn = os.getenv('SNS_TOPIC_ARN')
+    sns_topic_arn = os.getenv('SNS_PUBLISH_TOPIC_ARN')
     mqtt_topic = os.getenv('MQTT_PUBLISH_TOPIC')
     iot_endpoint = os.getenv('IOT_ENDPOINT')
 
