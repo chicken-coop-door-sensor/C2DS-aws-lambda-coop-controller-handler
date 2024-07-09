@@ -112,11 +112,14 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
     print(f'Publishing MQTT message: {new_state} to topic: {mqtt_topic}')
     mqtt = boto3.client('iot-data', endpoint_url=iot_endpoint)
     mqtt_message = {
-        "state": new_state
+        "LED": new_state
     }
     response = mqtt.publish(topic=mqtt_topic, qos=1, payload=json.dumps(mqtt_message))
     print(f'Publish MQTT response: {response}')
 
+
+def get_led_color(state_str):
+    return "GREEN" if "ERROR" in state_str else "FLASHING_RED"
 
 def lambda_handler(event, context):
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
@@ -147,5 +150,6 @@ def lambda_handler(event, context):
     else:
         print("State has not changed. No action required.")
 
+    led_color = get_led_color(new_state)
     # Publish MQTT message always because the devices need to know the current state
-    publish_mqtt_message(new_state, mqtt_topic, iot_endpoint)
+    publish_mqtt_message(led_color, mqtt_topic, iot_endpoint)
