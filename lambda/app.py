@@ -99,6 +99,7 @@ def set_ddb_state(table, new_state):
 
 
 def publish_sns_message(new_state, sns_topic_arn):
+    print(f'Publishing SNS message: {new_state}')
     sns = boto3.client('sns')
     sns_message = {
         "message": new_state
@@ -108,6 +109,7 @@ def publish_sns_message(new_state, sns_topic_arn):
 
 
 def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
+    print(f'Publishing MQTT message: {new_state} to topic: {mqtt_topic}')
     mqtt = boto3.client('iot-data', endpoint_url=iot_endpoint)
     mqtt_message = {
         "state": new_state
@@ -120,7 +122,7 @@ def lambda_handler(event, context):
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
     ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
     sns_topic_arn = os.getenv('SNS_TOPIC_ARN')
-    mqtt_topic = os.getenv('MQTT_TOPIC')
+    mqtt_topic = os.getenv('MQTT_PUBLISH_TOPIC')
     iot_endpoint = os.getenv('IOT_ENDPOINT')
 
     dynamodb = boto3.resource('dynamodb')
