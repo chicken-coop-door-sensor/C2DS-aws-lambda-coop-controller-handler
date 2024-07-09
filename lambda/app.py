@@ -114,12 +114,16 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
     mqtt_message = {
         "LED": new_state
     }
-    response = mqtt.publish(topic=mqtt_topic, qos=1, payload=json.dumps(mqtt_message))
+    response = mqtt.publish(
+        topic=mqtt_topic,
+        qos=1,
+        payload=json.dumps(mqtt_message)
+    )
     print(f'Publish MQTT response: {response}')
 
 
 def get_led_color(state_str):
-    return "LED_GREEN" if "ERROR" in state_str else "LED_FLASHING_RED"
+    return "LED_FLASHING_RED" if "ERROR" in state_str else "LED_GREEN"
 
 def lambda_handler(event, context):
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
