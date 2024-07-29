@@ -126,6 +126,10 @@ def get_led_color(state_str):
     return "LED_FLASHING_RED" if "ERROR" in state_str else "LED_GREEN"
 
 def lambda_handler(event, context):
+    if 'ack' in event:
+        print("Received ack event:\n" + json.dumps(event, indent=2))
+        return
+
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
     ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
     sns_topic_arn = os.getenv('SNS_PUBLISH_TOPIC_ARN')
