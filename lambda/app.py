@@ -126,9 +126,7 @@ def get_led_color(state_str):
     return "LED_FLASHING_RED" if "ERROR" in state_str else "LED_GREEN"
 
 def lambda_handler(event, context):
-    if 'ack' in event:
-        print("Received ack event:\n" + json.dumps(event, indent=2))
-        return
+    print(f"event:\n{event}")
 
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
     ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
@@ -141,6 +139,9 @@ def lambda_handler(event, context):
 
     print("Received event: " + json.dumps(event, indent=2))
     door_status = event.get('door')
+    if not door_status:
+        print("No door status received. Exiting.")
+        return
 
     now_daytime = is_daytime(ddb_twilight_table_name)
     print(f"Is it daytime? {now_daytime}")
