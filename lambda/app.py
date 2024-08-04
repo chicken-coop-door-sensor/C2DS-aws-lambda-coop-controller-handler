@@ -5,6 +5,14 @@ from datetime import datetime
 import boto3
 import pytz
 
+# Lookup table for LED colors based on states
+LED_COLOR_LOOKUP = {
+    "CHICKEN_COOP_DOOR_OPEN_IN_DAYTIME_OK": "LED_GREEN",
+    "CHICKEN_COOP_DOOR_CLOSED_AT_NIGHT_OK": "LED_GREEN",
+    "CHICKEN_COOP_DOOR_CLOSED_IN_DAYTIME_ERROR": "LED_FLASHING_YELLOW",
+    "CHICKEN_COOP_DOOR_OPEN_AT_NIGHT_ERROR": "LED_FLASHING_RED",
+    "CHICKEN_COOP_DOOR_SENSOR_FAILURE_ERROR": "LED_FLASHING_CYAN"
+}
 
 def get_local_time(timezone_name):
     try:
@@ -17,7 +25,6 @@ def get_local_time(timezone_name):
         return local_time
     except pytz.UnknownTimeZoneError:
         return f"Unknown timezone: {timezone_name}"
-
 
 def is_daytime(table_name) -> bool:
     print("Checking if it is daytime")
@@ -53,7 +60,6 @@ def is_daytime(table_name) -> bool:
         else:
             return False
 
-
 def reported_state(door_status, is_daytime):
     print(f"door_status: {door_status}")
     print(f"is_daytime: {is_daytime}")
@@ -72,7 +78,6 @@ def reported_state(door_status, is_daytime):
     print(f"Returning state: {state}")
     return state
 
-
 def get_ddb_state(table):
     STATE_KEY = 'coop_state'
     CURRENT_STATE_VALUE = 'current_status'
@@ -86,7 +91,6 @@ def get_ddb_state(table):
         print("The key 'Status' does not exist in the item.")
         return None
 
-
 def set_ddb_state(table, new_state):
     response = table.put_item(
         Item={
@@ -97,7 +101,6 @@ def set_ddb_state(table, new_state):
     print(f'ddb response: {response}')
     print(f'Updated ddb state to: {new_state}')
 
-
 def publish_sns_message(new_state, sns_topic_arn):
     print(f'Publishing SNS message: {new_state}')
     sns = boto3.client('sns')
@@ -106,7 +109,6 @@ def publish_sns_message(new_state, sns_topic_arn):
     }
     response = sns.publish(TopicArn=sns_topic_arn, Message=json.dumps(sns_message))
     print(f'Publish SNS response: {response}')
-
 
 def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
     print(f'Publishing MQTT message: {new_state} to topic: {mqtt_topic}')
@@ -121,9 +123,8 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
     )
     print(f'Publish MQTT response: {response}')
 
-
 def get_led_color(state_str):
-    return "LED_FLASHING_RED" if "ERROR" in state_str else "LED_GREEN"
+    return LED_COLOR_LOOKUP.get(state_str, "LED_FLASHING_RED")
 
 def lambda_handler(event, context):
     print(f"event:\n{event}")
