@@ -126,9 +126,8 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
 def get_led_color(state_str):
     return LED_COLOR_LOOKUP.get(state_str, "LED_FLASHING_RED")
 
-def lambda_handler(event, context):
-    print(f"event:\n{event}")
 
+def handle_door_status(event, door_status):
     ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
     ddb_twilight_table_name = os.getenv('DDB_TWILIGHT_TABLE_NAME')
     sns_topic_arn = os.getenv('SNS_PUBLISH_TOPIC_ARN')
@@ -138,13 +137,8 @@ def lambda_handler(event, context):
     dynamodb = boto3.resource('dynamodb')
     ddb_state_table = dynamodb.Table(ddb_state_table_name)
 
-    print("Received event: " + json.dumps(event, indent=2))
-    door_status = event.get('door')
-    if not door_status:
-        print("No door status received. Exiting.")
-        return
-
     now_daytime = is_daytime(ddb_twilight_table_name)
+
     print(f"Is it daytime? {now_daytime}")
 
     new_state = reported_state(door_status, now_daytime)
@@ -163,3 +157,30 @@ def lambda_handler(event, context):
     led_color = get_led_color(new_state)
     # Publish MQTT message always because the devices need to know the current state
     publish_mqtt_message(led_color, mqtt_topic, iot_endpoint)
+
+
+def send_current_state():
+    ddb_state_table_name = os.getenv('DDB_STATE_TABLE_NAME')
+    dynamodb = boto3.resource('dynamodb')
+    ddb_state_table = dynamodb.Table(ddb_state_table_name)
+
+    current_state = get_ddb_state(ddb_state_table)
+    print(f"Current state: {current_state}")
+
+    if current_state:
+        publish_mqtt_message(get_led_color(current_state), os.getenv('MQTT_PUBLISH_TOPIC'), os.getenv('IOT_ENDPOINT'))
+    else:
+        print("No current state found in DynamoDB. Unable to publish MQTT message.")
+
+
+def lambda_handler(event, context):
+    print(f"event:\n{event}")
+    print(f"context:\n{context}")
+
+    door_status = event.get('door')
+    if door_status:
+        handle_door_status(event, door_status)
+    elif 'message' in event:
+        print(f"Received message: {event['message']}")
+        if event['message'] == 'status_request':
+            send_current_state()
