@@ -175,7 +175,7 @@ def send_current_state():
 
 def lambda_handler(event, context):
     print(f"event:\n{event}")
-    print(f"context:\n{context}")
+    # print(f"context:\n{context}")
 
     door_status = event.get('door')
     if door_status:
