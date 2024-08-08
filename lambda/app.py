@@ -27,7 +27,7 @@ def get_local_time(timezone_name):
         return f"Unknown timezone: {timezone_name}"
 
 def is_daytime(table_name) -> bool:
-    print("Checking if it is daytime")
+    # print("Checking if it is daytime")
     ddb = boto3.resource('dynamodb')
     table = ddb.Table(table_name)
 
@@ -41,13 +41,13 @@ def is_daytime(table_name) -> bool:
     else:
         raise Exception("No items found in DDB")
 
-    print(f"Timezone: {timezone} Sunrise: {sunrise}, Sunset: {sunset}")
+    # print(f"Timezone: {timezone} Sunrise: {sunrise}, Sunset: {sunset}")
 
     current_time = datetime.strptime(get_local_time(timezone), "%H:%M").time()
     sunrise_time = datetime.strptime(sunrise, "%H:%M").time()
     sunset_time = datetime.strptime(sunset, "%H:%M").time()
 
-    print(f"Current time: {current_time}, Sunrise time: {sunrise_time}, Sunset time: {sunset_time}")
+    # print(f"Current time: {current_time}, Sunrise time: {sunrise_time}, Sunset time: {sunset_time}")
 
     if sunrise_time < sunset_time:
         if sunrise_time <= current_time < sunset_time:
@@ -61,8 +61,8 @@ def is_daytime(table_name) -> bool:
             return False
 
 def reported_state(door_status, is_daytime):
-    print(f"door_status: {door_status}")
-    print(f"is_daytime: {is_daytime}")
+    # print(f"door_status: {door_status}")
+    # print(f"is_daytime: {is_daytime}")
 
     state = None
     if door_status == 'OPEN' and is_daytime:
@@ -83,7 +83,7 @@ def get_ddb_state(table):
     CURRENT_STATE_VALUE = 'current_status'
     try:
         response = table.get_item(Key={STATE_KEY: CURRENT_STATE_VALUE})
-        print(f"full response: {response}")
+        # print(f"full response: {response}")
         coop_state = response['Item']['Status']
         print(f"get current state returning: {coop_state}")
         return coop_state
@@ -98,8 +98,8 @@ def set_ddb_state(table, new_state):
             'Status': new_state
         }
     )
-    print(f'ddb response: {response}')
-    print(f'Updated ddb state to: {new_state}')
+    # print(f'ddb response: {response}')
+    # print(f'Updated ddb state to: {new_state}')
 
 def publish_sns_message(new_state, sns_topic_arn):
     print(f'Publishing SNS message: {new_state}')
@@ -121,7 +121,7 @@ def publish_mqtt_message(new_state, mqtt_topic, iot_endpoint):
         qos=1,
         payload=json.dumps(mqtt_message)
     )
-    print(f'Publish MQTT response: {response}')
+    # print(f'Publish MQTT response: {response}')
 
 def get_led_color(state_str):
     return LED_COLOR_LOOKUP.get(state_str, "LED_FLASHING_RED")
